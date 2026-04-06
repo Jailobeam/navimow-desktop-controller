@@ -1,0 +1,19 @@
+# Build output
+dist/
+bin/
+obj/
+
+# Local app data / diagnostics
+*.log
+startup-error.log
+
+# IDE files
+.vs/
+.vscode/
+*.user
+*.suo
+*.cache
+
+# OS files
+Thumbs.db
+Desktop.ini
