@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace NavimowDesktopController
 {
@@ -134,6 +136,15 @@ namespace NavimowDesktopController
                 return "-";
             }
 
+            if (key == "time" || key == "timestamp")
+            {
+                var formattedTimestamp = TryFormatEpochTimestamp(rawValue);
+                if (!string.IsNullOrWhiteSpace(formattedTimestamp))
+                {
+                    return formattedTimestamp;
+                }
+            }
+
             Dictionary<string, string> labels;
             string mapped;
             if (StateLabels.TryGetValue(key, out labels) && labels.TryGetValue(rawValue, out mapped))
@@ -147,6 +158,34 @@ namespace NavimowDesktopController
             }
 
             return rawValue;
+        }
+
+        private static string TryFormatEpochTimestamp(string rawValue)
+        {
+            double numericValue;
+            if (!double.TryParse(rawValue, NumberStyles.Any, CultureInfo.InvariantCulture, out numericValue))
+            {
+                return null;
+            }
+
+            DateTimeOffset timestamp;
+            try
+            {
+                if (Math.Abs(numericValue) >= 100000000000D)
+                {
+                    timestamp = DateTimeOffset.FromUnixTimeMilliseconds(Convert.ToInt64(Math.Round(numericValue)));
+                }
+                else
+                {
+                    timestamp = DateTimeOffset.FromUnixTimeSeconds(Convert.ToInt64(Math.Round(numericValue)));
+                }
+            }
+            catch
+            {
+                return null;
+            }
+
+            return timestamp.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss", CultureInfo.GetCultureInfo("de-DE"));
         }
 
         public static IEnumerable<string> GetKnownKeys()
