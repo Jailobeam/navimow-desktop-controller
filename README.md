@@ -6,14 +6,20 @@ Die App bietet Login, Token-Verwaltung, Geräteauswahl, Statusanzeige, Steuerbef
 
 ## Funktionen
 
-- OAuth-Login über die Navimow Smart-Home Login-Seite
+- OAuth-Login über die Navimow-Smart-Home-Login-Seite
 - Token-Austausch, Token-Refresh und Token-Löschung
 - Geräte abrufen und steuern
 - REST-Statusabfrage
 - MQTT-over-WebSocket für Live-Updates
 - REST-Fallback, wenn MQTT aktuell nicht verfügbar ist
-- Kartenansicht für Positionsdaten
-- Strukturansichten für Gerät, Status, MQTT-Event, MQTT-Attribute und MQTT-Info
+- Kartenansicht für Positionsdaten mit Live-Spur
+- Kartenbild als Unterlage:
+  - Bild laden und entfernen
+  - Bild verschieben, skalieren und drehen
+  - Kartenansicht per Mausrad zoomen
+  - Kartenansicht per rechter Maustaste verschieben
+  - Doppelklick zum Zurücksetzen der Kartenansicht
+- Strukturansichten für Gerät, Status, MQTT Event, MQTT Attribute, MQTT Location und MQTT Info
 - Raw-JSON- und Log-Ansicht
 
 ## Build
@@ -32,11 +38,21 @@ Die erzeugte Datei liegt danach unter `dist\NavimowDesktopController.exe`.
 3. In `Authorization Code` einfügen.
 4. `Token abrufen` klicken.
 5. `Geräte abrufen` klicken.
-6. Gerät wählen und Status/MQTT nutzen.
+6. Gerät wählen und Status oder MQTT nutzen.
+7. Optional ein Kartenbild laden und direkt in der Kartenansicht ausrichten.
+
+## Kartenbild
+
+- Das Kartenbild liegt als unterer Layer unter der Fahrspur.
+- Die Ausrichtung bleibt nach einem Neustart erhalten.
+- Skalierung und Drehung lassen sich über die Regler im Kopfbereich anpassen.
+- Über dem Regler verändert das Mausrad den Wert in Einerschritten.
 
 ## Lokale Daten
 
 - Sessiondaten werden lokal unter `%LOCALAPPDATA%\NavimowDesktopController\session.json` gespeichert.
+- Das Kartenbild wird lokal unter `%LOCALAPPDATA%\NavimowDesktopController\map-overlay.png` gespeichert.
+- Die Kartenbild-Einstellungen werden lokal unter `%LOCALAPPDATA%\NavimowDesktopController\map-overlay.json` gespeichert.
 - Fehler beim App-Start werden lokal unter `%LOCALAPPDATA%\NavimowDesktopController\startup-error.log` protokolliert.
 - Diese Dateien gehören nicht in ein Git-Repository.
 
@@ -44,7 +60,7 @@ Die erzeugte Datei liegt danach unter `dist\NavimowDesktopController.exe`.
 
 - `dist/` ist in `.gitignore` ausgeschlossen und sollte besser über GitHub Releases verteilt werden.
 - Vor dem Veröffentlichen keine persönlichen Tokens oder Logs hochladen.
-- Wenn du eine Release-EXE anbieten willst, nutze am besten ein GitHub Release statt eines normalen Commits.
+- Wenn du eine ausführbare Windows-Datei anbieten willst, nutze am besten ein GitHub Release statt eines normalen Commits.
 
 ## Herkunft und Hinweise
 
