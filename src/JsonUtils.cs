@@ -10,9 +10,14 @@ namespace NavimowDesktopController
     {
         private static readonly JavaScriptSerializer Serializer = new JavaScriptSerializer();
 
+        public static object Parse(string json)
+        {
+            return Serializer.DeserializeObject(json);
+        }
+
         public static Dictionary<string, object> ParseObject(string json)
         {
-            var result = Serializer.DeserializeObject(json) as Dictionary<string, object>;
+            var result = Parse(json) as Dictionary<string, object>;
             return result ?? new Dictionary<string, object>();
         }
 

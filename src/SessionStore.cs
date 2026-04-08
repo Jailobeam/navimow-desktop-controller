@@ -9,12 +9,18 @@ namespace NavimowDesktopController
 
         public SessionStore()
         {
+            var baseDirectory = GetBaseDirectory();
+            this.sessionFilePath = Path.Combine(baseDirectory, "session.json");
+        }
+
+        public static string GetBaseDirectory()
+        {
             var baseDirectory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "NavimowDesktopController");
 
             Directory.CreateDirectory(baseDirectory);
-            this.sessionFilePath = Path.Combine(baseDirectory, "session.json");
+            return baseDirectory;
         }
 
         public SessionData Load()

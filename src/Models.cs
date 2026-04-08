@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 
 namespace NavimowDesktopController
 {
@@ -55,5 +56,16 @@ namespace NavimowDesktopController
     {
         public string Topic { get; set; }
         public string Payload { get; set; }
+    }
+
+    internal sealed class OverlayMapState
+    {
+        public Image Image { get; set; }
+        public int ScalePercent { get; set; }
+        public float RotationDegrees { get; set; }
+        public float CenterX { get; set; }
+        public float CenterY { get; set; }
+        public float BaseWidthWorld { get; set; }
+        public float BaseHeightWorld { get; set; }
     }
 }

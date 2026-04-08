@@ -23,15 +23,23 @@ namespace NavimowDesktopController
             { "vehicleState", "Mower State" },
             { "status", "Status" },
             { "state", "State" },
+            { "type", "Type" },
             { "battery", "Battery Level (%)" },
+            { "batteryLevel", "Battery Level (%)" },
+            { "electricity", "Battery Level (%)" },
             { "capacityRemaining", "Remaining Capacity" },
             { "rawValue", "Raw Value" },
             { "unit", "Unit" },
+            { "gpsSignal", "GPS Signal" },
             { "position", "GPS Position" },
             { "latitude", "Latitude" },
             { "longitude", "Longitude" },
             { "lat", "Latitude" },
             { "lng", "Longitude" },
+            { "postureX", "Position X" },
+            { "postureY", "Position Y" },
+            { "postureTheta", "Heading" },
+            { "time", "Timestamp" },
             { "error_code", "Error Code" },
             { "error_message", "Error Message" },
             { "errorCode", "Error Code" },
@@ -65,6 +73,7 @@ namespace NavimowDesktopController
                     { "Self-checking", "Self-Checking" },
                     { "Offline", "Offline" },
                     { "offline", "Offline" },
+                    { "4", "Docked" },
                 }
             },
             {
@@ -129,10 +138,20 @@ namespace NavimowDesktopController
             string mapped;
             if (StateLabels.TryGetValue(key, out labels) && labels.TryGetValue(rawValue, out mapped))
             {
+                if (key == "vehicleState" || key == "status" || key == "state" || key == "error_code")
+                {
+                    return mapped;
+                }
+
                 return mapped + " (" + rawValue + ")";
             }
 
             return rawValue;
+        }
+
+        public static IEnumerable<string> GetKnownKeys()
+        {
+            return Descriptions.Keys;
         }
     }
 }
