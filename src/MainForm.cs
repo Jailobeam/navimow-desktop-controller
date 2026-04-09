@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
@@ -32,6 +34,7 @@ namespace NavimowDesktopController
         private TextBox authorizationCodeTextBox;
         private Button tokenButton;
         private Button deleteTokenButton;
+        private CheckBox themeModeCheckBox;
         private Label connectionStatusLabel;
         private Button getDevicesButton;
         private ComboBox deviceComboBox;
@@ -53,21 +56,34 @@ namespace NavimowDesktopController
         private Label selectedDeviceLabel;
         private Label deviceStateLabel;
         private Label batteryLabel;
-        private Label signalLabel;
         private Label positionLabel;
         private Label errorLabel;
         private Label timestampLabel;
         private Label mqttStatusLabel;
         private Panel mapPanel;
-        private ListView allValuesListView;
+        private Panel sidebarPanel;
+        private Panel mapHostPanel;
+        private Panel sidebarHostPanel;
+        private TableLayoutPanel headerPanel;
+        private TableLayoutPanel contentGridPanel;
+        private TableLayoutPanel rightContentGridPanel;
+        private TableLayoutPanel overlayHeaderPanel;
+        private TableLayoutPanel overlayScaleHostPanel;
+        private TableLayoutPanel overlayRotationHostPanel;
+        private TableLayoutPanel commandButtonsGrid;
+        private ThemedTabControl mainTabControl;
+        private FlowLayoutPanel tabHeaderPanel;
+        private Panel tabContentBorderPanel;
+        private Panel tabContentHostPanel;
+        private Panel allValuesPanel;
         private TreeView deviceTreeView;
         private TreeView statusTreeView;
         private TreeView eventTreeView;
         private TreeView attributesTreeView;
         private TreeView locationTreeView;
         private TreeView mqttInfoTreeView;
-        private TextBox rawJsonTextBox;
-        private TextBox logTextBox;
+        private DarkTextView rawJsonTextView;
+        private DarkTextView logTextView;
         private Timer refreshTimer;
         private string lastMqttFailureSignature;
         private DateTime lastDetailRefreshUtc;
@@ -90,6 +106,56 @@ namespace NavimowDesktopController
         private PointF mapViewPanScreen = PointF.Empty;
         private bool mapViewPanning;
         private Point mapViewPanStartScreen;
+        private bool isDarkMode = true;
+        private readonly List<Button> tabButtons = new List<Button>();
+        private readonly List<Control> tabContentPanels = new List<Control>();
+        private Button activeTabButton;
+        private readonly List<AllValuesRow> allValuesRows = new List<AllValuesRow>();
+        private int allValuesScrollOffset;
+        private bool allValuesScrollbarDragging;
+        private int allValuesScrollbarDragOffsetY;
+        private static readonly Color AppBackgroundColor = Color.FromArgb(243, 246, 240);
+        private static readonly Color SurfaceColor = Color.FromArgb(255, 255, 252);
+        private static readonly Color SidebarColor = Color.FromArgb(234, 239, 230);
+        private static readonly Color BorderColor = Color.FromArgb(206, 214, 203);
+        private static readonly Color TextColor = Color.FromArgb(41, 52, 46);
+        private static readonly Color MutedTextColor = Color.FromArgb(104, 115, 108);
+        private static readonly Color AccentColor = Color.FromArgb(59, 123, 100);
+        private static readonly Color AccentSoftColor = Color.FromArgb(222, 236, 228);
+        private static readonly Color DangerColor = Color.FromArgb(183, 88, 74);
+
+        private Color CurrentAppBackgroundColor { get { return this.isDarkMode ? Color.FromArgb(24, 29, 31) : AppBackgroundColor; } }
+        private Color CurrentSurfaceColor { get { return this.isDarkMode ? Color.FromArgb(35, 41, 44) : SurfaceColor; } }
+        private Color CurrentSidebarColor { get { return this.isDarkMode ? Color.FromArgb(29, 35, 38) : SidebarColor; } }
+        private Color CurrentBorderColor { get { return this.isDarkMode ? Color.FromArgb(31, 36, 39) : BorderColor; } }
+        private Color CurrentTextColor { get { return this.isDarkMode ? Color.FromArgb(236, 241, 238) : TextColor; } }
+        private Color CurrentMutedTextColor { get { return this.isDarkMode ? Color.FromArgb(163, 173, 168) : MutedTextColor; } }
+        private Color CurrentAccentColor { get { return this.isDarkMode ? Color.FromArgb(88, 176, 140) : AccentColor; } }
+        private Color CurrentAccentSoftColor { get { return this.isDarkMode ? Color.FromArgb(49, 72, 64) : AccentSoftColor; } }
+        private Color CurrentDangerColor { get { return this.isDarkMode ? Color.FromArgb(227, 140, 123) : DangerColor; } }
+        private Color CurrentSuccessColor { get { return this.isDarkMode ? Color.FromArgb(146, 215, 176) : Color.FromArgb(45, 128, 87); } }
+        private Color CurrentErrorColor { get { return this.isDarkMode ? Color.FromArgb(255, 166, 152) : Color.FromArgb(181, 73, 59); } }
+        private Color CurrentMapPathColor { get { return this.isDarkMode ? Color.FromArgb(120, 171, 255) : Color.FromArgb(44, 111, 231); } }
+        private Color CurrentMapMessageColor { get { return this.isDarkMode ? Color.FromArgb(173, 181, 188) : Color.FromArgb(124, 133, 138); } }
+        private Color CurrentMarkerStartColor { get { return this.isDarkMode ? Color.FromArgb(255, 110, 96) : Color.FromArgb(235, 73, 61); } }
+        private Color CurrentMarkerEndColor { get { return this.isDarkMode ? Color.FromArgb(115, 214, 132) : Color.FromArgb(46, 179, 85); } }
+        private Color CurrentTableHeaderColor { get { return this.isDarkMode ? Color.FromArgb(44, 52, 56) : Color.FromArgb(241, 245, 240); } }
+        private Color CurrentTableAlternateRowColor { get { return this.isDarkMode ? Color.FromArgb(39, 46, 50) : Color.FromArgb(248, 250, 246); } }
+        private Color CurrentTableSelectionColor { get { return this.isDarkMode ? Color.FromArgb(56, 92, 78) : Color.FromArgb(214, 234, 223); } }
+        private Color CurrentTableGridColor { get { return this.isDarkMode ? Color.FromArgb(43, 49, 53) : Color.FromArgb(214, 220, 214); } }
+
+        [DllImport("dwmapi.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
+
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern int SetWindowTheme(IntPtr hWnd, string pszSubAppName, string pszSubIdList);
+
+        private sealed class AllValuesRow
+        {
+            public string Path { get; set; }
+            public string Label { get; set; }
+            public string Value { get; set; }
+        }
 
         public MainForm()
         {
@@ -104,7 +170,9 @@ namespace NavimowDesktopController
             this.StartPosition = FormStartPosition.CenterScreen;
             this.MinimumSize = new Size(1180, 760);
             this.ClientSize = new Size(1320, 860);
-            this.BackColor = Color.WhiteSmoke;
+            this.Font = new Font("Segoe UI", 9F, FontStyle.Regular);
+            this.ForeColor = this.CurrentTextColor;
+            this.BackColor = this.CurrentAppBackgroundColor;
             this.Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             this.lastDetailRefreshUtc = DateTime.MinValue;
 
@@ -116,12 +184,12 @@ namespace NavimowDesktopController
             if (this.session != null && !string.IsNullOrWhiteSpace(this.session.AccessToken))
             {
                 this.connectionStatusLabel.Text = "Gespeicherter Token geladen.";
-                this.connectionStatusLabel.ForeColor = Color.DarkGreen;
+                this.connectionStatusLabel.ForeColor = this.CurrentSuccessColor;
             }
             else
             {
                 this.connectionStatusLabel.Text = "Noch kein Token vorhanden.";
-                this.connectionStatusLabel.ForeColor = Color.DarkRed;
+                this.connectionStatusLabel.ForeColor = this.CurrentErrorColor;
             }
 
             this.refreshTimer = new Timer();
@@ -150,152 +218,176 @@ namespace NavimowDesktopController
             base.OnFormClosed(e);
         }
 
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            this.ApplyWindowTheme();
+        }
+
         private void BuildLayout()
         {
             var root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
+            root.BackColor = this.CurrentAppBackgroundColor;
             root.ColumnCount = 1;
             root.RowCount = 2;
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 92F));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             this.Controls.Add(root);
 
-            var header = new TableLayoutPanel();
-            header.Dock = DockStyle.Fill;
-            header.Padding = new Padding(14, 8, 14, 6);
-            header.ColumnCount = 7;
-            header.RowCount = 2;
-            header.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-            header.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140F));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120F));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112F));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112F));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190F));
-            header.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 270F));
-            root.Controls.Add(header, 0, 0);
+            this.headerPanel = new TableLayoutPanel();
+            this.headerPanel.Dock = DockStyle.Fill;
+            this.headerPanel.BackColor = this.CurrentSurfaceColor;
+            this.headerPanel.Padding = new Padding(14, 8, 14, 6);
+            this.headerPanel.ColumnCount = 7;
+            this.headerPanel.RowCount = 2;
+            this.headerPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+            this.headerPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
+            this.headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 182F));
+            this.headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 126F));
+            this.headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            this.headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112F));
+            this.headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112F));
+            this.headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190F));
+            this.headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 286F));
+            root.Controls.Add(this.headerPanel, 0, 0);
 
             this.loginButton = new Button();
             this.loginButton.Text = "Login bei Navimow";
             this.loginButton.Dock = DockStyle.Fill;
             this.loginButton.Margin = new Padding(0, 0, 10, 0);
-            header.Controls.Add(this.loginButton, 0, 0);
+            this.headerPanel.Controls.Add(this.loginButton, 0, 0);
 
             var authLabel = new Label();
             authLabel.Text = "Authorization Code:";
             authLabel.Dock = DockStyle.Fill;
             authLabel.TextAlign = ContentAlignment.MiddleLeft;
             authLabel.Margin = new Padding(0, 0, 10, 0);
-            header.Controls.Add(authLabel, 1, 0);
+            this.headerPanel.Controls.Add(authLabel, 1, 0);
 
             this.authorizationCodeTextBox = new TextBox();
             this.authorizationCodeTextBox.Anchor = AnchorStyles.Left | AnchorStyles.Right;
             this.authorizationCodeTextBox.Margin = new Padding(0, 5, 10, 5);
-            header.Controls.Add(this.authorizationCodeTextBox, 2, 0);
+            this.headerPanel.Controls.Add(this.authorizationCodeTextBox, 2, 0);
 
             this.tokenButton = new Button();
             this.tokenButton.Text = "Token abrufen";
             this.tokenButton.Dock = DockStyle.Fill;
             this.tokenButton.Margin = new Padding(0, 0, 10, 0);
-            header.Controls.Add(this.tokenButton, 3, 0);
+            this.headerPanel.Controls.Add(this.tokenButton, 3, 0);
 
             this.deleteTokenButton = new Button();
             this.deleteTokenButton.Text = "Token löschen";
             this.deleteTokenButton.Dock = DockStyle.Fill;
             this.deleteTokenButton.Margin = new Padding(0);
-            header.Controls.Add(this.deleteTokenButton, 4, 0);
+            this.headerPanel.Controls.Add(this.deleteTokenButton, 4, 0);
+
+            this.themeModeCheckBox = new CheckBox();
+            this.themeModeCheckBox.Text = "Dunkelmodus";
+            this.themeModeCheckBox.AutoSize = true;
+            this.themeModeCheckBox.Checked = true;
+            this.themeModeCheckBox.Dock = DockStyle.Left;
+            this.themeModeCheckBox.Margin = new Padding(0, 2, 0, 0);
+            this.headerPanel.Controls.Add(this.themeModeCheckBox, 0, 1);
+            this.headerPanel.SetColumnSpan(this.themeModeCheckBox, 2);
 
             this.connectionStatusLabel = new Label();
             this.connectionStatusLabel.Dock = DockStyle.Fill;
-            this.connectionStatusLabel.TextAlign = ContentAlignment.MiddleLeft;
+            this.connectionStatusLabel.TextAlign = ContentAlignment.MiddleCenter;
             this.connectionStatusLabel.AutoEllipsis = true;
-            this.connectionStatusLabel.Margin = new Padding(0, 0, 0, 0);
-            header.Controls.Add(this.connectionStatusLabel, 3, 1);
-            header.SetColumnSpan(this.connectionStatusLabel, 2);
+            this.connectionStatusLabel.Margin = new Padding(0, 2, 0, 0);
+            this.headerPanel.Controls.Add(this.connectionStatusLabel, 3, 1);
+            this.headerPanel.SetColumnSpan(this.connectionStatusLabel, 2);
 
-            var overlayHeader = new TableLayoutPanel();
-            overlayHeader.Dock = DockStyle.Fill;
-            overlayHeader.Margin = new Padding(6, 0, 0, 0);
-            overlayHeader.RowCount = 2;
-            overlayHeader.ColumnCount = 4;
-            overlayHeader.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
-            overlayHeader.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
-            overlayHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94F));
-            overlayHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 94F));
-            overlayHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            overlayHeader.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
-            header.Controls.Add(overlayHeader, 5, 0);
-            header.SetColumnSpan(overlayHeader, 2);
-            header.SetRowSpan(overlayHeader, 2);
+            this.overlayHeaderPanel = new TableLayoutPanel();
+            this.overlayHeaderPanel.Dock = DockStyle.Fill;
+            this.overlayHeaderPanel.Margin = new Padding(6, 0, 0, 0);
+            this.overlayHeaderPanel.BackColor = this.CurrentSurfaceColor;
+            this.overlayHeaderPanel.RowCount = 2;
+            this.overlayHeaderPanel.ColumnCount = 4;
+            this.overlayHeaderPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+            this.overlayHeaderPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 24F));
+            this.overlayHeaderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112F));
+            this.overlayHeaderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112F));
+            this.overlayHeaderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            this.overlayHeaderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            this.headerPanel.Controls.Add(this.overlayHeaderPanel, 5, 0);
+            this.headerPanel.SetColumnSpan(this.overlayHeaderPanel, 2);
+            this.headerPanel.SetRowSpan(this.overlayHeaderPanel, 2);
 
-            var contentGrid = new TableLayoutPanel();
-            contentGrid.Dock = DockStyle.Fill;
-            contentGrid.Padding = new Padding(12, 10, 12, 12);
-            contentGrid.ColumnCount = 2;
-            contentGrid.RowCount = 1;
-            contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 320F));
-            contentGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            contentGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            root.Controls.Add(contentGrid, 0, 1);
+            this.contentGridPanel = new TableLayoutPanel();
+            this.contentGridPanel.Dock = DockStyle.Fill;
+            this.contentGridPanel.BackColor = this.CurrentAppBackgroundColor;
+            this.contentGridPanel.Padding = new Padding(12, 10, 12, 12);
+            this.contentGridPanel.ColumnCount = 2;
+            this.contentGridPanel.RowCount = 1;
+            this.contentGridPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 320F));
+            this.contentGridPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            this.contentGridPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            root.Controls.Add(this.contentGridPanel, 0, 1);
 
-            var leftHost = new Panel();
-            leftHost.Dock = DockStyle.Fill;
-            leftHost.Margin = new Padding(0, 0, 14, 0);
-            contentGrid.Controls.Add(leftHost, 0, 0);
+            this.sidebarHostPanel = new Panel();
+            this.sidebarHostPanel.Dock = DockStyle.Fill;
+            this.sidebarHostPanel.BackColor = this.CurrentSidebarColor;
+            this.sidebarHostPanel.Margin = new Padding(0, 0, 14, 0);
+            this.contentGridPanel.Controls.Add(this.sidebarHostPanel, 0, 0);
 
-            var leftPanel = new Panel();
-            leftPanel.Dock = DockStyle.Fill;
-            leftPanel.AutoScroll = true;
-            leftHost.Controls.Add(leftPanel);
+            this.sidebarPanel = new Panel();
+            this.sidebarPanel.Dock = DockStyle.Fill;
+            this.sidebarPanel.AutoScroll = true;
+            this.sidebarPanel.BackColor = this.CurrentSidebarColor;
+            this.sidebarHostPanel.Controls.Add(this.sidebarPanel);
 
             this.getDevicesButton = new Button();
             this.getDevicesButton.Text = "Geräte abrufen";
             this.getDevicesButton.Location = new Point(0, 12);
             this.getDevicesButton.Size = new Size(300, 34);
-            leftPanel.Controls.Add(this.getDevicesButton);
+            this.sidebarPanel.Controls.Add(this.getDevicesButton);
 
             this.deviceComboBox = new ComboBox();
             this.deviceComboBox.DropDownStyle = ComboBoxStyle.DropDownList;
             this.deviceComboBox.Location = new Point(0, 56);
             this.deviceComboBox.Size = new Size(300, 24);
-            leftPanel.Controls.Add(this.deviceComboBox);
+            this.sidebarPanel.Controls.Add(this.deviceComboBox);
 
             this.showStatusButton = new Button();
             this.showStatusButton.Text = "Status aktualisieren";
             this.showStatusButton.Location = new Point(0, 100);
             this.showStatusButton.Size = new Size(300, 34);
-            leftPanel.Controls.Add(this.showStatusButton);
+            this.sidebarPanel.Controls.Add(this.showStatusButton);
 
             this.showMqttInfoButton = new Button();
             this.showMqttInfoButton.Text = "MQTT Info aktualisieren";
             this.showMqttInfoButton.Location = new Point(0, 144);
             this.showMqttInfoButton.Size = new Size(300, 34);
-            leftPanel.Controls.Add(this.showMqttInfoButton);
+            this.sidebarPanel.Controls.Add(this.showMqttInfoButton);
 
             this.disableMqttCheckBox = new CheckBox();
             this.disableMqttCheckBox.Text = "MQTT deaktivieren";
             this.disableMqttCheckBox.AutoSize = true;
             this.disableMqttCheckBox.Location = new Point(0, 188);
-            leftPanel.Controls.Add(this.disableMqttCheckBox);
+            this.sidebarPanel.Controls.Add(this.disableMqttCheckBox);
 
             this.loadMapImageButton = new Button();
             this.loadMapImageButton.Text = "Bild laden";
             this.loadMapImageButton.Dock = DockStyle.Fill;
-            this.loadMapImageButton.Margin = new Padding(0, 0, 8, 6);
-            leftPanel.Controls.Add(this.loadMapImageButton);
+            this.loadMapImageButton.Margin = new Padding(0, 0, 8, 0);
+            this.loadMapImageButton.MinimumSize = new Size(0, 34);
+            this.sidebarPanel.Controls.Add(this.loadMapImageButton);
 
             this.clearMapImageButton = new Button();
-            this.clearMapImageButton.Text = "Bild entfernen";
+            this.clearMapImageButton.Text = "Bild löschen";
             this.clearMapImageButton.Dock = DockStyle.Fill;
-            this.clearMapImageButton.Margin = new Padding(0, 0, 8, 6);
-            leftPanel.Controls.Add(this.clearMapImageButton);
+            this.clearMapImageButton.Margin = new Padding(0);
+            this.clearMapImageButton.MinimumSize = new Size(0, 34);
+            this.sidebarPanel.Controls.Add(this.clearMapImageButton);
 
             this.editMapImageCheckBox = new CheckBox();
             this.editMapImageCheckBox.Text = "Bild bearbeiten";
             this.editMapImageCheckBox.AutoSize = true;
-            this.editMapImageCheckBox.Margin = new Padding(0, 4, 0, 0);
-            leftPanel.Controls.Add(this.editMapImageCheckBox);
+            this.editMapImageCheckBox.Anchor = AnchorStyles.None;
+            this.editMapImageCheckBox.Margin = new Padding(0, 2, 0, 0);
+            this.sidebarPanel.Controls.Add(this.editMapImageCheckBox);
 
             this.overlayScaleLabel = new Label();
             this.overlayScaleLabel.Text = "Skalierung: 100 % (x1.00)";
@@ -304,7 +396,7 @@ namespace NavimowDesktopController
             this.overlayScaleLabel.Margin = new Padding(0);
             this.overlayScaleLabel.TextAlign = ContentAlignment.MiddleLeft;
             this.overlayScaleLabel.Font = new Font(this.Font.FontFamily, 7.5F, FontStyle.Regular);
-            leftPanel.Controls.Add(this.overlayScaleLabel);
+            this.sidebarPanel.Controls.Add(this.overlayScaleLabel);
 
             this.overlayScaleTrackBar = new PrecisionTrackBar();
             this.overlayScaleTrackBar.AutoSize = false;
@@ -317,7 +409,7 @@ namespace NavimowDesktopController
             this.overlayScaleTrackBar.SmallChange = 1;
             this.overlayScaleTrackBar.LargeChange = 1;
             this.overlayScaleTrackBar.Value = 100;
-            leftPanel.Controls.Add(this.overlayScaleTrackBar);
+            this.sidebarPanel.Controls.Add(this.overlayScaleTrackBar);
 
             this.overlayRotationLabel = new Label();
             this.overlayRotationLabel.Text = "Drehung: 0 Grad";
@@ -326,7 +418,7 @@ namespace NavimowDesktopController
             this.overlayRotationLabel.Margin = new Padding(0);
             this.overlayRotationLabel.TextAlign = ContentAlignment.MiddleLeft;
             this.overlayRotationLabel.Font = new Font(this.Font.FontFamily, 7.5F, FontStyle.Regular);
-            leftPanel.Controls.Add(this.overlayRotationLabel);
+            this.sidebarPanel.Controls.Add(this.overlayRotationLabel);
 
             this.overlayRotationTrackBar = new PrecisionTrackBar();
             this.overlayRotationTrackBar.AutoSize = false;
@@ -339,64 +431,63 @@ namespace NavimowDesktopController
             this.overlayRotationTrackBar.SmallChange = 1;
             this.overlayRotationTrackBar.LargeChange = 1;
             this.overlayRotationTrackBar.Value = 0;
-            leftPanel.Controls.Add(this.overlayRotationTrackBar);
+            this.sidebarPanel.Controls.Add(this.overlayRotationTrackBar);
 
-            var scaleHost = new TableLayoutPanel();
-            scaleHost.Dock = DockStyle.Fill;
-            scaleHost.Margin = new Padding(8, 0, 8, 0);
-            scaleHost.RowCount = 2;
-            scaleHost.ColumnCount = 1;
-            scaleHost.RowStyles.Add(new RowStyle(SizeType.Absolute, 14F));
-            scaleHost.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-            scaleHost.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            scaleHost.Controls.Add(this.overlayScaleLabel, 0, 0);
-            scaleHost.Controls.Add(this.overlayScaleTrackBar, 0, 1);
-            overlayHeader.Controls.Add(scaleHost, 2, 0);
-            overlayHeader.SetRowSpan(scaleHost, 2);
+            this.overlayScaleHostPanel = new TableLayoutPanel();
+            this.overlayScaleHostPanel.Dock = DockStyle.Fill;
+            this.overlayScaleHostPanel.Margin = new Padding(8, 0, 8, 0);
+            this.overlayScaleHostPanel.BackColor = this.CurrentSurfaceColor;
+            this.overlayScaleHostPanel.RowCount = 2;
+            this.overlayScaleHostPanel.ColumnCount = 1;
+            this.overlayScaleHostPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 14F));
+            this.overlayScaleHostPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+            this.overlayScaleHostPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            this.overlayScaleHostPanel.Controls.Add(this.overlayScaleLabel, 0, 0);
+            this.overlayScaleHostPanel.Controls.Add(this.overlayScaleTrackBar, 0, 1);
+            this.overlayHeaderPanel.Controls.Add(this.overlayScaleHostPanel, 2, 0);
+            this.overlayHeaderPanel.SetRowSpan(this.overlayScaleHostPanel, 2);
 
-            var rotationHost = new TableLayoutPanel();
-            rotationHost.Dock = DockStyle.Fill;
-            rotationHost.Margin = new Padding(0, 0, 0, 0);
-            rotationHost.RowCount = 2;
-            rotationHost.ColumnCount = 1;
-            rotationHost.RowStyles.Add(new RowStyle(SizeType.Absolute, 14F));
-            rotationHost.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
-            rotationHost.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-            rotationHost.Controls.Add(this.overlayRotationLabel, 0, 0);
-            rotationHost.Controls.Add(this.overlayRotationTrackBar, 0, 1);
-            overlayHeader.Controls.Add(rotationHost, 3, 0);
-            overlayHeader.SetRowSpan(rotationHost, 2);
+            this.overlayRotationHostPanel = new TableLayoutPanel();
+            this.overlayRotationHostPanel.Dock = DockStyle.Fill;
+            this.overlayRotationHostPanel.Margin = new Padding(0);
+            this.overlayRotationHostPanel.BackColor = this.CurrentSurfaceColor;
+            this.overlayRotationHostPanel.RowCount = 2;
+            this.overlayRotationHostPanel.ColumnCount = 1;
+            this.overlayRotationHostPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 14F));
+            this.overlayRotationHostPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 20F));
+            this.overlayRotationHostPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            this.overlayRotationHostPanel.Controls.Add(this.overlayRotationLabel, 0, 0);
+            this.overlayRotationHostPanel.Controls.Add(this.overlayRotationTrackBar, 0, 1);
+            this.overlayHeaderPanel.Controls.Add(this.overlayRotationHostPanel, 3, 0);
+            this.overlayHeaderPanel.SetRowSpan(this.overlayRotationHostPanel, 2);
 
-            overlayHeader.Controls.Add(this.loadMapImageButton, 0, 0);
-            overlayHeader.Controls.Add(this.clearMapImageButton, 1, 0);
-            overlayHeader.Controls.Add(this.editMapImageCheckBox, 0, 1);
-            overlayHeader.SetColumnSpan(this.editMapImageCheckBox, 2);
+            this.overlayHeaderPanel.Controls.Add(this.loadMapImageButton, 0, 0);
+            this.overlayHeaderPanel.Controls.Add(this.clearMapImageButton, 1, 0);
+            this.overlayHeaderPanel.Controls.Add(this.editMapImageCheckBox, 0, 1);
+            this.overlayHeaderPanel.SetColumnSpan(this.editMapImageCheckBox, 2);
 
             var infoHeader = new Label();
             infoHeader.Text = "Übersicht:";
             infoHeader.Font = new Font(this.Font, FontStyle.Bold);
             infoHeader.AutoSize = true;
             infoHeader.Location = new Point(0, 226);
-            leftPanel.Controls.Add(infoHeader);
+            this.sidebarPanel.Controls.Add(infoHeader);
 
-            this.selectedDeviceLabel = this.CreateInfoLabel("Gerät: -", 252, leftPanel);
-            this.deviceStateLabel = this.CreateInfoLabel("Zustand: -", 276, leftPanel);
-            this.batteryLabel = this.CreateInfoLabel("Akku: -", 300, leftPanel);
-            this.signalLabel = this.CreateInfoLabel("Signal: -", 324, leftPanel);
-            this.positionLabel = this.CreateInfoLabel("Position: -", 348, leftPanel);
-            this.errorLabel = this.CreateInfoLabel("Fehler: -", 372, leftPanel);
-            this.timestampLabel = this.CreateInfoLabel("Zeit: -", 396, leftPanel);
-            this.mqttStatusLabel = this.CreateInfoLabel("MQTT: -", 420, leftPanel);
-            this.signalLabel.Visible = false;
+            this.selectedDeviceLabel = this.CreateInfoLabel("Gerät: -", 252, this.sidebarPanel);
+            this.deviceStateLabel = this.CreateInfoLabel("Zustand: -", 276, this.sidebarPanel);
+            this.batteryLabel = this.CreateInfoLabel("Akku: -", 300, this.sidebarPanel);
+            this.positionLabel = this.CreateInfoLabel("Position: -", 348, this.sidebarPanel);
+            this.errorLabel = this.CreateInfoLabel("Fehler: -", 372, this.sidebarPanel);
+            this.timestampLabel = this.CreateInfoLabel("Zeit: -", 396, this.sidebarPanel);
+            this.mqttStatusLabel = this.CreateInfoLabel("MQTT: -", 420, this.sidebarPanel);
             this.selectedDeviceLabel.Top = 252;
             this.deviceStateLabel.Top = 276;
             this.batteryLabel.Top = 300;
-            this.signalLabel.Top = 324;
             this.positionLabel.Top = 348;
             this.errorLabel.Top = 372;
             this.timestampLabel.Top = 396;
             this.mqttStatusLabel.Top = 420;
-            this.positionLabel.Top = this.signalLabel.Top;
+            this.positionLabel.Top = 324;
             this.errorLabel.Top = this.positionLabel.Top + 24;
             this.timestampLabel.Top = this.errorLabel.Top + 24;
             this.mqttStatusLabel.Top = this.timestampLabel.Top + 24;
@@ -406,7 +497,7 @@ namespace NavimowDesktopController
             commandHeader.Font = new Font(this.Font, FontStyle.Bold);
             commandHeader.AutoSize = true;
             commandHeader.Location = new Point(0, 468);
-            leftPanel.Controls.Add(commandHeader);
+            this.sidebarPanel.Controls.Add(commandHeader);
 
             this.startButton = this.CreateCommandButton("Start", 0, 498);
             this.stopButton = this.CreateCommandButton("Stop", 76, 498);
@@ -414,89 +505,147 @@ namespace NavimowDesktopController
             this.resumeButton = this.CreateCommandButton("Resume", 228, 498);
             this.dockButton = this.CreateCommandButton("Dock", 0, 536);
 
-            leftPanel.Controls.Add(this.startButton);
-            leftPanel.Controls.Add(this.stopButton);
-            leftPanel.Controls.Add(this.pauseButton);
-            leftPanel.Controls.Add(this.resumeButton);
-            leftPanel.Controls.Add(this.dockButton);
+            this.commandButtonsGrid = new TableLayoutPanel();
+            this.commandButtonsGrid.Location = new Point(0, 498);
+            this.commandButtonsGrid.Size = new Size(300, 32);
+            this.commandButtonsGrid.ColumnCount = 4;
+            this.commandButtonsGrid.RowCount = 1;
+            this.commandButtonsGrid.Margin = new Padding(0);
+            this.commandButtonsGrid.Padding = new Padding(0);
+            this.commandButtonsGrid.BackColor = this.CurrentSidebarColor;
+            this.commandButtonsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            this.commandButtonsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            this.commandButtonsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
+            this.commandButtonsGrid.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25F));
 
-            var rightGrid = new TableLayoutPanel();
-            rightGrid.Dock = DockStyle.Fill;
-            rightGrid.Margin = new Padding(0);
-            rightGrid.ColumnCount = 1;
-            rightGrid.RowCount = 2;
-            rightGrid.RowStyles.Add(new RowStyle(SizeType.Absolute, 330F));
-            rightGrid.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            contentGrid.Controls.Add(rightGrid, 1, 0);
+            this.startButton.Dock = DockStyle.Fill;
+            this.stopButton.Dock = DockStyle.Fill;
+            this.pauseButton.Dock = DockStyle.Fill;
+            this.resumeButton.Dock = DockStyle.Fill;
+            this.startButton.Margin = new Padding(0, 0, 6, 0);
+            this.stopButton.Margin = new Padding(0, 0, 6, 0);
+            this.pauseButton.Margin = new Padding(0, 0, 6, 0);
+            this.resumeButton.Margin = new Padding(0);
+            this.commandButtonsGrid.Controls.Add(this.startButton, 0, 0);
+            this.commandButtonsGrid.Controls.Add(this.stopButton, 1, 0);
+            this.commandButtonsGrid.Controls.Add(this.pauseButton, 2, 0);
+            this.commandButtonsGrid.Controls.Add(this.resumeButton, 3, 0);
+
+            this.dockButton.Location = new Point(0, 540);
+            this.dockButton.Size = new Size(144, 30);
+
+            this.sidebarPanel.Controls.Add(this.commandButtonsGrid);
+            this.sidebarPanel.Controls.Add(this.dockButton);
+
+            this.rightContentGridPanel = new TableLayoutPanel();
+            this.rightContentGridPanel.Dock = DockStyle.Fill;
+            this.rightContentGridPanel.Margin = new Padding(0);
+            this.rightContentGridPanel.BackColor = this.CurrentAppBackgroundColor;
+            this.rightContentGridPanel.ColumnCount = 1;
+            this.rightContentGridPanel.RowCount = 2;
+            this.rightContentGridPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 330F));
+            this.rightContentGridPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            this.contentGridPanel.Controls.Add(this.rightContentGridPanel, 1, 0);
 
             var mapHost = new Panel();
             mapHost.Dock = DockStyle.Fill;
             mapHost.Margin = new Padding(0);
             mapHost.Padding = new Padding(0);
-            mapHost.BackColor = Color.Gainsboro;
-            rightGrid.Controls.Add(mapHost, 0, 0);
+            mapHost.BackColor = this.CurrentBorderColor;
+            this.rightContentGridPanel.Controls.Add(mapHost, 0, 0);
+            this.mapHostPanel = mapHost;
 
             this.mapPanel = new Panel();
             this.mapPanel.Dock = DockStyle.Fill;
-            this.mapPanel.BackColor = Color.White;
+            this.mapPanel.BackColor = this.CurrentSurfaceColor;
             this.mapPanel.Margin = new Padding(0);
             this.mapPanel.TabStop = true;
             this.mapPanel.Paint += this.MapPanel_Paint;
             mapHost.Controls.Add(this.mapPanel);
             EnableDoubleBuffer(this.mapPanel);
 
-            var tabs = new TabControl();
-            tabs.Dock = DockStyle.Fill;
-            tabs.Multiline = false;
-            tabs.Margin = new Padding(0, 8, 0, 0);
-            rightGrid.Controls.Add(tabs, 0, 1);
+            var tabAreaLayout = new TableLayoutPanel();
+            tabAreaLayout.Dock = DockStyle.Fill;
+            tabAreaLayout.Margin = new Padding(0, 8, 0, 0);
+            tabAreaLayout.BackColor = this.CurrentAppBackgroundColor;
+            tabAreaLayout.ColumnCount = 1;
+            tabAreaLayout.RowCount = 2;
+            tabAreaLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34F));
+            tabAreaLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            this.rightContentGridPanel.Controls.Add(tabAreaLayout, 0, 1);
 
-            this.allValuesListView = new ListView();
-            this.allValuesListView.Dock = DockStyle.Fill;
-            this.allValuesListView.View = View.Details;
-            this.allValuesListView.FullRowSelect = true;
-            this.allValuesListView.GridLines = true;
-            this.allValuesListView.Columns.Add("Pfad", 260);
-            this.allValuesListView.Columns.Add("Label", 180);
-            this.allValuesListView.Columns.Add("Wert", 420);
-            tabs.TabPages.Add(this.CreateTab("Alle Werte", this.allValuesListView));
-            EnableDoubleBuffer(this.allValuesListView);
+            this.tabHeaderPanel = new FlowLayoutPanel();
+            this.tabHeaderPanel.Dock = DockStyle.Fill;
+            this.tabHeaderPanel.Margin = new Padding(0);
+            this.tabHeaderPanel.Padding = new Padding(0);
+            this.tabHeaderPanel.WrapContents = false;
+            this.tabHeaderPanel.AutoScroll = false;
+            this.tabHeaderPanel.FlowDirection = FlowDirection.LeftToRight;
+            this.tabHeaderPanel.BackColor = this.CurrentAppBackgroundColor;
+            tabAreaLayout.Controls.Add(this.tabHeaderPanel, 0, 0);
+
+            this.tabContentBorderPanel = new Panel();
+            this.tabContentBorderPanel.Dock = DockStyle.Fill;
+            this.tabContentBorderPanel.Margin = new Padding(0);
+            this.tabContentBorderPanel.Padding = new Padding(1);
+            this.tabContentBorderPanel.BackColor = this.CurrentBorderColor;
+            tabAreaLayout.Controls.Add(this.tabContentBorderPanel, 0, 1);
+
+            this.tabContentHostPanel = new Panel();
+            this.tabContentHostPanel.Dock = DockStyle.Fill;
+            this.tabContentHostPanel.Margin = new Padding(0);
+            this.tabContentHostPanel.Padding = new Padding(0);
+            this.tabContentHostPanel.BackColor = this.CurrentSurfaceColor;
+            this.tabContentBorderPanel.Controls.Add(this.tabContentHostPanel);
+
+            // Legacy compatibility container kept non-visual to avoid destabilizing existing code paths.
+            this.mainTabControl = new ThemedTabControl();
+
+
+            this.allValuesPanel = new Panel();
+            this.allValuesPanel.Dock = DockStyle.Fill;
+            this.allValuesPanel.Margin = new Padding(0);
+            this.allValuesPanel.BackColor = this.CurrentSurfaceColor;
+            this.allValuesPanel.TabStop = true;
+            this.allValuesPanel.Paint += this.AllValuesPanel_Paint;
+            this.AddCustomTab("Alle Werte", this.allValuesPanel);
+            EnableDoubleBuffer(this.allValuesPanel);
 
             this.deviceTreeView = this.CreateTreeView();
-            tabs.TabPages.Add(this.CreateTab("Gerät", this.deviceTreeView));
+            this.mainTabControl.TabPages.Add(this.CreateTab("Gerät", this.deviceTreeView));
+
+            this.AddCustomTab("Gerät", this.deviceTreeView);
 
             this.statusTreeView = this.CreateTreeView();
-            tabs.TabPages.Add(this.CreateTab("Status", this.statusTreeView));
+            this.AddCustomTab("Status", this.statusTreeView);
 
             this.eventTreeView = this.CreateTreeView();
-            tabs.TabPages.Add(this.CreateTab("MQTT Event", this.eventTreeView));
+            this.AddCustomTab("MQTT Event", this.eventTreeView);
 
             this.attributesTreeView = this.CreateTreeView();
-            tabs.TabPages.Add(this.CreateTab("MQTT Attribute", this.attributesTreeView));
+            this.AddCustomTab("MQTT Attribute", this.attributesTreeView);
 
             this.locationTreeView = this.CreateTreeView();
-            tabs.TabPages.Add(this.CreateTab("MQTT Location", this.locationTreeView));
+            this.AddCustomTab("MQTT Location", this.locationTreeView);
 
             this.mqttInfoTreeView = this.CreateTreeView();
-            tabs.TabPages.Add(this.CreateTab("MQTT Info", this.mqttInfoTreeView));
+            this.AddCustomTab("MQTT Info", this.mqttInfoTreeView);
 
-            this.rawJsonTextBox = new TextBox();
-            this.rawJsonTextBox.Dock = DockStyle.Fill;
-            this.rawJsonTextBox.Multiline = true;
-            this.rawJsonTextBox.ScrollBars = ScrollBars.Both;
-            this.rawJsonTextBox.ReadOnly = true;
-            this.rawJsonTextBox.WordWrap = false;
-            this.rawJsonTextBox.Font = new Font("Consolas", 10F);
-            tabs.TabPages.Add(this.CreateTab("Raw JSON", this.rawJsonTextBox));
+            this.rawJsonTextView = new DarkTextView();
+            this.rawJsonTextView.Dock = DockStyle.Fill;
+            this.rawJsonTextView.Font = new Font("Consolas", 10F);
+            this.AddCustomTab("Raw JSON", this.rawJsonTextView);
 
-            this.logTextBox = new TextBox();
-            this.logTextBox.Dock = DockStyle.Fill;
-            this.logTextBox.Multiline = true;
-            this.logTextBox.ScrollBars = ScrollBars.Both;
-            this.logTextBox.ReadOnly = true;
-            this.logTextBox.WordWrap = false;
-            this.logTextBox.Font = new Font("Consolas", 10F);
-            tabs.TabPages.Add(this.CreateTab("Log", this.logTextBox));
+            this.logTextView = new DarkTextView();
+            this.logTextView.Dock = DockStyle.Fill;
+            this.logTextView.Font = new Font("Consolas", 10F);
+            this.logTextView.StickToBottomOnAppend = true;
+            this.AddCustomTab("Log", this.logTextView);
+            if (this.tabButtons.Count > 0)
+            {
+                this.SetActiveTab(this.tabButtons[0]);
+            }
+            this.ApplyTheme();
         }
 
         private Label CreateInfoLabel(string text, int top, Control parent)
@@ -505,6 +654,7 @@ namespace NavimowDesktopController
             label.Text = text;
             label.AutoSize = true;
             label.Location = new Point(12, top);
+            label.ForeColor = this.CurrentTextColor;
             parent.Controls.Add(label);
             return label;
         }
@@ -515,6 +665,7 @@ namespace NavimowDesktopController
             button.Text = text;
             button.Location = new Point(x, y);
             button.Size = new Size(70, 30);
+            this.StyleButton(button, false, false);
             return button;
         }
 
@@ -523,14 +674,671 @@ namespace NavimowDesktopController
             var treeView = new TreeView();
             treeView.Dock = DockStyle.Fill;
             treeView.HideSelection = false;
+            treeView.BackColor = this.CurrentSurfaceColor;
+            treeView.ForeColor = this.CurrentTextColor;
+            treeView.BorderStyle = BorderStyle.None;
+            treeView.LineColor = this.CurrentBorderColor;
             return treeView;
         }
 
         private TabPage CreateTab(string title, Control control)
         {
             var page = new TabPage(title);
-            page.Controls.Add(control);
+            page.UseVisualStyleBackColor = false;
+            page.BackColor = this.CurrentSurfaceColor;
+            page.Padding = new Padding(0);
+
+            var contentHost = new Panel();
+            contentHost.Dock = DockStyle.Fill;
+            contentHost.Margin = new Padding(0);
+            contentHost.Padding = new Padding(0);
+            contentHost.BackColor = this.CurrentSurfaceColor;
+
+            control.Margin = new Padding(0);
+            contentHost.Controls.Add(control);
+            page.Controls.Add(contentHost);
             return page;
+        }
+
+        private void AddCustomTab(string title, Control control)
+        {
+            var tabButton = new Button();
+            tabButton.Text = title;
+            tabButton.Tag = control;
+            tabButton.AutoSize = true;
+            tabButton.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            tabButton.Padding = new Padding(14, 0, 14, 0);
+            tabButton.Height = 30;
+            tabButton.Margin = new Padding(0, 0, 4, 0);
+            tabButton.FlatStyle = FlatStyle.Flat;
+            tabButton.FlatAppearance.BorderSize = 1;
+            tabButton.Cursor = Cursors.Hand;
+            tabButton.Click += (sender, args) => this.SetActiveTab((Button)sender);
+            this.tabHeaderPanel.Controls.Add(tabButton);
+            this.tabButtons.Add(tabButton);
+
+            var contentHost = new Panel();
+            contentHost.Dock = DockStyle.Fill;
+            contentHost.Margin = new Padding(0);
+            contentHost.Padding = new Padding(0);
+            contentHost.BackColor = this.CurrentSurfaceColor;
+            contentHost.Visible = false;
+            control.Dock = DockStyle.Fill;
+            control.Margin = new Padding(0);
+            contentHost.Controls.Add(control);
+            this.tabContentHostPanel.Controls.Add(contentHost);
+            this.tabContentPanels.Add(contentHost);
+        }
+
+        private void SetActiveTab(Button button)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            this.activeTabButton = button;
+            for (int index = 0; index < this.tabButtons.Count; index++)
+            {
+                var tabButton = this.tabButtons[index];
+                var active = tabButton == button;
+                this.StyleTabButton(tabButton, active);
+                if (index < this.tabContentPanels.Count)
+                {
+                    this.tabContentPanels[index].Visible = active;
+                    if (active)
+                    {
+                        this.tabContentPanels[index].BringToFront();
+                    }
+                }
+            }
+        }
+
+        private void StyleTabButton(Button button, bool active)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            button.ForeColor = active ? this.CurrentTextColor : this.CurrentMutedTextColor;
+            button.BackColor = active ? this.CurrentSurfaceColor : this.CurrentSidebarColor;
+            button.FlatAppearance.BorderColor = this.CurrentBorderColor;
+            button.FlatAppearance.MouseDownBackColor = active ? this.CurrentSurfaceColor : this.CurrentSidebarColor;
+            button.FlatAppearance.MouseOverBackColor = active ? this.CurrentSurfaceColor : this.CurrentSurfaceColor;
+        }
+
+        private void ApplyTheme()
+        {
+            this.BackColor = this.CurrentAppBackgroundColor;
+            this.ForeColor = this.CurrentTextColor;
+            foreach (Control control in this.Controls)
+            {
+                var table = control as TableLayoutPanel;
+                if (table != null)
+                {
+                    table.BackColor = this.CurrentAppBackgroundColor;
+                }
+            }
+
+            if (this.headerPanel != null)
+            {
+                this.headerPanel.BackColor = this.CurrentSurfaceColor;
+                this.ApplyLabelTheme(this.headerPanel);
+            }
+
+            if (this.overlayHeaderPanel != null)
+            {
+                this.overlayHeaderPanel.BackColor = this.CurrentSurfaceColor;
+            }
+
+            if (this.overlayScaleHostPanel != null)
+            {
+                this.overlayScaleHostPanel.BackColor = this.CurrentSurfaceColor;
+            }
+
+            if (this.overlayRotationHostPanel != null)
+            {
+                this.overlayRotationHostPanel.BackColor = this.CurrentSurfaceColor;
+            }
+
+            if (this.contentGridPanel != null)
+            {
+                this.contentGridPanel.BackColor = this.CurrentAppBackgroundColor;
+            }
+
+            if (this.sidebarHostPanel != null)
+            {
+                this.sidebarHostPanel.BackColor = this.CurrentSidebarColor;
+            }
+
+            if (this.sidebarPanel != null)
+            {
+                this.sidebarPanel.BackColor = this.CurrentSidebarColor;
+                this.ApplyLabelTheme(this.sidebarPanel);
+            }
+
+            if (this.rightContentGridPanel != null)
+            {
+                this.rightContentGridPanel.BackColor = this.CurrentAppBackgroundColor;
+            }
+
+            if (this.tabHeaderPanel != null)
+            {
+                this.tabHeaderPanel.BackColor = this.CurrentAppBackgroundColor;
+            }
+
+            if (this.tabContentBorderPanel != null)
+            {
+                this.tabContentBorderPanel.BackColor = this.CurrentBorderColor;
+            }
+
+            if (this.tabContentHostPanel != null)
+            {
+                this.tabContentHostPanel.BackColor = this.CurrentSurfaceColor;
+            }
+
+            if (this.mapHostPanel != null)
+            {
+                this.mapHostPanel.BackColor = this.CurrentBorderColor;
+            }
+
+            this.StyleButton(this.loginButton, false, false);
+            this.StyleButton(this.tokenButton, false, false);
+            this.StyleButton(this.getDevicesButton, false, false);
+            this.StyleButton(this.showStatusButton, false, false);
+            this.StyleButton(this.showMqttInfoButton, false, false);
+            this.StyleButton(this.loadMapImageButton, false, false);
+            this.StyleButton(this.clearMapImageButton, false, false);
+            this.StyleButton(this.startButton, false, false);
+            this.StyleButton(this.stopButton, false, false);
+            this.StyleButton(this.pauseButton, false, false);
+            this.StyleButton(this.resumeButton, false, false);
+            this.StyleButton(this.dockButton, false, false);
+            this.StyleButton(this.deleteTokenButton, false, false);
+
+            this.StyleInput(this.authorizationCodeTextBox);
+            this.StyleComboBox(this.deviceComboBox);
+
+            this.disableMqttCheckBox.ForeColor = this.CurrentTextColor;
+            this.disableMqttCheckBox.BackColor = this.CurrentSidebarColor;
+            this.editMapImageCheckBox.ForeColor = this.CurrentTextColor;
+            this.editMapImageCheckBox.BackColor = this.CurrentSurfaceColor;
+            this.themeModeCheckBox.ForeColor = this.CurrentTextColor;
+            this.themeModeCheckBox.BackColor = this.CurrentSurfaceColor;
+            this.overlayScaleLabel.ForeColor = this.CurrentTextColor;
+            this.overlayScaleLabel.BackColor = this.CurrentSurfaceColor;
+            this.overlayRotationLabel.ForeColor = this.CurrentTextColor;
+            this.overlayRotationLabel.BackColor = this.CurrentSurfaceColor;
+            this.overlayScaleTrackBar.BackColor = this.CurrentSurfaceColor;
+            this.overlayRotationTrackBar.BackColor = this.CurrentSurfaceColor;
+            this.commandButtonsGrid.BackColor = this.CurrentSidebarColor;
+
+            this.allValuesPanel.BackColor = this.CurrentSurfaceColor;
+            this.deviceTreeView.BackColor = this.CurrentSurfaceColor;
+            this.deviceTreeView.ForeColor = this.CurrentTextColor;
+            this.deviceTreeView.BorderStyle = BorderStyle.None;
+            this.deviceTreeView.LineColor = this.CurrentBorderColor;
+            this.statusTreeView.BackColor = this.CurrentSurfaceColor;
+            this.statusTreeView.ForeColor = this.CurrentTextColor;
+            this.statusTreeView.BorderStyle = BorderStyle.None;
+            this.statusTreeView.LineColor = this.CurrentBorderColor;
+            this.eventTreeView.BackColor = this.CurrentSurfaceColor;
+            this.eventTreeView.ForeColor = this.CurrentTextColor;
+            this.eventTreeView.BorderStyle = BorderStyle.None;
+            this.eventTreeView.LineColor = this.CurrentBorderColor;
+            this.attributesTreeView.BackColor = this.CurrentSurfaceColor;
+            this.attributesTreeView.ForeColor = this.CurrentTextColor;
+            this.attributesTreeView.BorderStyle = BorderStyle.None;
+            this.attributesTreeView.LineColor = this.CurrentBorderColor;
+            this.locationTreeView.BackColor = this.CurrentSurfaceColor;
+            this.locationTreeView.ForeColor = this.CurrentTextColor;
+            this.locationTreeView.BorderStyle = BorderStyle.None;
+            this.locationTreeView.LineColor = this.CurrentBorderColor;
+            this.mqttInfoTreeView.BackColor = this.CurrentSurfaceColor;
+            this.mqttInfoTreeView.ForeColor = this.CurrentTextColor;
+            this.mqttInfoTreeView.BorderStyle = BorderStyle.None;
+            this.mqttInfoTreeView.LineColor = this.CurrentBorderColor;
+
+            this.rawJsonTextView.BackColor = this.CurrentSurfaceColor;
+            this.rawJsonTextView.ForeColor = this.CurrentTextColor;
+            this.rawJsonTextView.ScrollbarTrackColor = this.CurrentSidebarColor;
+            this.rawJsonTextView.ScrollbarThumbColor = this.CurrentAccentSoftColor;
+            this.rawJsonTextView.BorderColor = this.CurrentTableGridColor;
+
+            this.logTextView.BackColor = this.CurrentSurfaceColor;
+            this.logTextView.ForeColor = this.CurrentTextColor;
+            this.logTextView.ScrollbarTrackColor = this.CurrentSidebarColor;
+            this.logTextView.ScrollbarThumbColor = this.CurrentAccentSoftColor;
+            this.logTextView.BorderColor = this.CurrentTableGridColor;
+
+            this.mapPanel.BackColor = this.CurrentSurfaceColor;
+
+            if (this.activeTabButton != null)
+            {
+                foreach (var tabButton in this.tabButtons)
+                {
+                    this.StyleTabButton(tabButton, tabButton == this.activeTabButton);
+                }
+            }
+
+            this.ApplyNativeControlThemes();
+            this.ApplyWindowTheme();
+            this.ApplyConnectionStatusColor();
+            this.allValuesPanel.Invalidate();
+            this.mapPanel.Invalidate();
+        }
+
+        private void StyleButton(Button button, bool primary, bool danger)
+        {
+            if (button == null)
+            {
+                return;
+            }
+
+            button.FlatStyle = FlatStyle.Flat;
+            button.Cursor = Cursors.Hand;
+            button.FlatAppearance.BorderSize = 1;
+            button.FlatAppearance.MouseDownBackColor = ControlPaint.Dark(this.CurrentAccentColor, 0.08F);
+            button.FlatAppearance.MouseOverBackColor = ControlPaint.Light(this.CurrentAccentColor, 0.08F);
+            button.Font = new Font(this.Font, FontStyle.Regular);
+            button.BackColor = this.CurrentAccentColor;
+            button.ForeColor = Color.White;
+            button.FlatAppearance.BorderColor = ControlPaint.Dark(this.CurrentAccentColor, 0.12F);
+        }
+
+        private void StyleInput(TextBox textBox)
+        {
+            if (textBox == null)
+            {
+                return;
+            }
+
+            textBox.BorderStyle = BorderStyle.FixedSingle;
+            textBox.BackColor = this.CurrentSurfaceColor;
+            textBox.ForeColor = this.CurrentTextColor;
+        }
+
+        private void StyleComboBox(ComboBox comboBox)
+        {
+            if (comboBox == null)
+            {
+                return;
+            }
+
+            comboBox.FlatStyle = FlatStyle.Flat;
+            comboBox.BackColor = this.CurrentSurfaceColor;
+            comboBox.ForeColor = this.CurrentTextColor;
+        }
+
+        private void MainTabControl_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            if (this.mainTabControl == null || e.Index < 0 || e.Index >= this.mainTabControl.TabPages.Count)
+            {
+                return;
+            }
+
+            var graphics = e.Graphics;
+            var bounds = e.Bounds;
+            var selected = (e.State & DrawItemState.Selected) == DrawItemState.Selected;
+            var page = this.mainTabControl.TabPages[e.Index];
+            var fillColor = selected ? this.CurrentSurfaceColor : this.CurrentSidebarColor;
+            using (var brush = new SolidBrush(fillColor))
+            {
+                graphics.FillRectangle(brush, bounds);
+            }
+
+            using (var borderPen = new Pen(this.CurrentBorderColor))
+            {
+                graphics.DrawRectangle(borderPen, bounds.X, bounds.Y, bounds.Width - 1, bounds.Height - 1);
+            }
+
+            if (selected)
+            {
+                using (var accentBrush = new SolidBrush(this.CurrentAccentColor))
+                {
+                    graphics.FillRectangle(accentBrush, bounds.X + 1, bounds.Bottom - 3, bounds.Width - 2, 3);
+                }
+            }
+
+            TextRenderer.DrawText(
+                graphics,
+                page.Text,
+                this.Font,
+                bounds,
+                selected ? this.CurrentTextColor : this.CurrentMutedTextColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+
+        private void AllValuesPanel_Paint(object sender, PaintEventArgs e)
+        {
+            var panel = this.allValuesPanel;
+            if (panel == null)
+            {
+                return;
+            }
+
+            const int headerHeight = 30;
+            const int rowHeight = 24;
+            const int scrollbarWidth = 14;
+
+            var width = Math.Max(0, panel.ClientSize.Width);
+            var height = Math.Max(0, panel.ClientSize.Height);
+            var contentWidth = Math.Max(0, width - scrollbarWidth);
+            var pathWidth = Math.Min(260, Math.Max(120, contentWidth / 3));
+            var labelWidth = Math.Min(180, Math.Max(110, contentWidth / 5));
+            var valueWidth = Math.Max(80, contentWidth - pathWidth - labelWidth);
+
+            var graphics = e.Graphics;
+            graphics.Clear(this.CurrentSurfaceColor);
+
+            using (var borderPen = new Pen(this.CurrentTableGridColor))
+            using (var headerBrush = new SolidBrush(this.CurrentTableHeaderColor))
+            using (var rowBrush = new SolidBrush(this.CurrentSurfaceColor))
+            using (var altRowBrush = new SolidBrush(this.CurrentTableAlternateRowColor))
+            using (var textBrush = new SolidBrush(this.CurrentTextColor))
+            using (var mutedBrush = new SolidBrush(this.CurrentMutedTextColor))
+            using (var scrollbarTrackBrush = new SolidBrush(this.CurrentSidebarColor))
+            using (var scrollbarThumbBrush = new SolidBrush(this.CurrentAccentSoftColor))
+            {
+                var headerBounds = new Rectangle(0, 0, contentWidth, headerHeight);
+                graphics.FillRectangle(headerBrush, headerBounds);
+                graphics.DrawRectangle(borderPen, 0, 0, contentWidth - 1, headerHeight - 1);
+
+                var pathHeader = new Rectangle(0, 0, pathWidth, headerHeight);
+                var labelHeader = new Rectangle(pathWidth, 0, labelWidth, headerHeight);
+                var valueHeader = new Rectangle(pathWidth + labelWidth, 0, valueWidth, headerHeight);
+                this.DrawAllValuesCell(graphics, pathHeader, "Pfad", textBrush, borderPen, true);
+                this.DrawAllValuesCell(graphics, labelHeader, "Label", textBrush, borderPen, true);
+                this.DrawAllValuesCell(graphics, valueHeader, "Wert", textBrush, borderPen, true);
+
+                var visibleHeight = Math.Max(0, height - headerHeight);
+                var visibleRows = Math.Max(1, visibleHeight / rowHeight);
+                var maxOffset = Math.Max(0, this.allValuesRows.Count - visibleRows);
+                if (this.allValuesScrollOffset > maxOffset)
+                {
+                    this.allValuesScrollOffset = maxOffset;
+                }
+
+                for (int rowIndex = 0; rowIndex < visibleRows; rowIndex++)
+                {
+                    var dataIndex = this.allValuesScrollOffset + rowIndex;
+                    var y = headerHeight + (rowIndex * rowHeight);
+                    var rowBounds = new Rectangle(0, y, contentWidth, rowHeight);
+                    graphics.FillRectangle(dataIndex % 2 == 0 ? rowBrush : altRowBrush, rowBounds);
+
+                    if (dataIndex < this.allValuesRows.Count)
+                    {
+                        var row = this.allValuesRows[dataIndex];
+                        this.DrawAllValuesCell(graphics, new Rectangle(0, y, pathWidth, rowHeight), row.Path, textBrush, borderPen, false);
+                        this.DrawAllValuesCell(graphics, new Rectangle(pathWidth, y, labelWidth, rowHeight), row.Label, textBrush, borderPen, false);
+                        this.DrawAllValuesCell(graphics, new Rectangle(pathWidth + labelWidth, y, valueWidth, rowHeight), row.Value, textBrush, borderPen, false);
+                    }
+                    else
+                    {
+                        this.DrawAllValuesCell(graphics, new Rectangle(0, y, pathWidth, rowHeight), string.Empty, mutedBrush, borderPen, false);
+                        this.DrawAllValuesCell(graphics, new Rectangle(pathWidth, y, labelWidth, rowHeight), string.Empty, mutedBrush, borderPen, false);
+                        this.DrawAllValuesCell(graphics, new Rectangle(pathWidth + labelWidth, y, valueWidth, rowHeight), string.Empty, mutedBrush, borderPen, false);
+                    }
+                }
+
+                var scrollbarBounds = new Rectangle(contentWidth, 0, scrollbarWidth, height);
+                graphics.FillRectangle(scrollbarTrackBrush, scrollbarBounds);
+                graphics.DrawRectangle(borderPen, scrollbarBounds.X, scrollbarBounds.Y, scrollbarBounds.Width - 1, scrollbarBounds.Height - 1);
+
+                if (this.allValuesRows.Count > visibleRows)
+                {
+                    var thumbHeight = Math.Max(36, (int)Math.Round((visibleRows / (double)this.allValuesRows.Count) * visibleHeight));
+                    var thumbTravel = Math.Max(1, visibleHeight - thumbHeight);
+                    var thumbY = headerHeight + (int)Math.Round((this.allValuesScrollOffset / (double)maxOffset) * thumbTravel);
+                    var thumbBounds = new Rectangle(contentWidth + 2, thumbY, scrollbarWidth - 4, thumbHeight);
+                    graphics.FillRectangle(scrollbarThumbBrush, thumbBounds);
+                    graphics.DrawRectangle(borderPen, thumbBounds.X, thumbBounds.Y, thumbBounds.Width - 1, thumbBounds.Height - 1);
+                }
+            }
+        }
+
+        private void DrawAllValuesCell(Graphics graphics, Rectangle bounds, string text, Brush textBrush, Pen borderPen, bool isHeader)
+        {
+            graphics.DrawRectangle(borderPen, bounds.X, bounds.Y, bounds.Width - 1, bounds.Height - 1);
+            var textBounds = new Rectangle(bounds.X + 8, bounds.Y + (isHeader ? 0 : 1), Math.Max(0, bounds.Width - 16), Math.Max(0, bounds.Height - 2));
+            TextRenderer.DrawText(
+                graphics,
+                text ?? string.Empty,
+                this.Font,
+                textBounds,
+                isHeader ? this.CurrentTextColor : this.CurrentTextColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+
+        private void AllValuesPanel_MouseWheel(object sender, MouseEventArgs e)
+        {
+            var delta = e.Delta > 0 ? -3 : 3;
+            this.ScrollAllValues(delta);
+        }
+
+        private void AllValuesPanel_MouseDown(object sender, MouseEventArgs e)
+        {
+            Rectangle thumbBounds;
+            if (!this.TryGetAllValuesScrollbarThumbBounds(out thumbBounds))
+            {
+                return;
+            }
+
+            if (thumbBounds.Contains(e.Location))
+            {
+                this.allValuesScrollbarDragging = true;
+                this.allValuesScrollbarDragOffsetY = e.Y - thumbBounds.Y;
+                this.allValuesPanel.Focus();
+                return;
+            }
+
+            if (e.X >= thumbBounds.X)
+            {
+                var delta = e.Y < thumbBounds.Y ? -this.GetAllValuesVisibleRowCount() : this.GetAllValuesVisibleRowCount();
+                this.ScrollAllValues(delta);
+            }
+        }
+
+        private void AllValuesPanel_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!this.allValuesScrollbarDragging)
+            {
+                return;
+            }
+
+            const int headerHeight = 30;
+            var visibleRows = this.GetAllValuesVisibleRowCount();
+            var maxOffset = Math.Max(0, this.allValuesRows.Count - visibleRows);
+            if (maxOffset <= 0)
+            {
+                return;
+            }
+
+            Rectangle thumbBounds;
+            if (!this.TryGetAllValuesScrollbarThumbBounds(out thumbBounds))
+            {
+                return;
+            }
+
+            var trackTop = headerHeight;
+            var trackHeight = Math.Max(1, this.allValuesPanel.ClientSize.Height - headerHeight - thumbBounds.Height);
+            var thumbTop = Math.Max(trackTop, Math.Min(trackTop + trackHeight, e.Y - this.allValuesScrollbarDragOffsetY));
+            var ratio = (thumbTop - trackTop) / (double)trackHeight;
+            this.allValuesScrollOffset = Math.Max(0, Math.Min(maxOffset, (int)Math.Round(ratio * maxOffset)));
+            this.allValuesPanel.Invalidate();
+        }
+
+        private void AllValuesPanel_MouseUp(object sender, MouseEventArgs e)
+        {
+            this.allValuesScrollbarDragging = false;
+        }
+
+        private void ScrollAllValues(int delta)
+        {
+            var visibleRows = this.GetAllValuesVisibleRowCount();
+            var maxOffset = Math.Max(0, this.allValuesRows.Count - visibleRows);
+            this.allValuesScrollOffset = Math.Max(0, Math.Min(maxOffset, this.allValuesScrollOffset + delta));
+            this.allValuesPanel.Invalidate();
+        }
+
+        private int GetAllValuesVisibleRowCount()
+        {
+            const int headerHeight = 30;
+            const int rowHeight = 24;
+            return Math.Max(1, (this.allValuesPanel.ClientSize.Height - headerHeight) / rowHeight);
+        }
+
+        private bool TryGetAllValuesScrollbarThumbBounds(out Rectangle thumbBounds)
+        {
+            const int headerHeight = 30;
+            const int scrollbarWidth = 14;
+
+            thumbBounds = Rectangle.Empty;
+            if (this.allValuesPanel == null)
+            {
+                return false;
+            }
+
+            var visibleRows = this.GetAllValuesVisibleRowCount();
+            if (this.allValuesRows.Count <= visibleRows)
+            {
+                return false;
+            }
+
+            var maxOffset = Math.Max(1, this.allValuesRows.Count - visibleRows);
+            var visibleHeight = Math.Max(1, this.allValuesPanel.ClientSize.Height - headerHeight);
+            var thumbHeight = Math.Max(36, (int)Math.Round((visibleRows / (double)this.allValuesRows.Count) * visibleHeight));
+            var thumbTravel = Math.Max(1, visibleHeight - thumbHeight);
+            var thumbY = headerHeight + (int)Math.Round((this.allValuesScrollOffset / (double)maxOffset) * thumbTravel);
+            thumbBounds = new Rectangle(this.allValuesPanel.ClientSize.Width - scrollbarWidth + 2, thumbY, scrollbarWidth - 4, thumbHeight);
+            return true;
+        }
+
+        private void ApplyWindowTheme()
+        {
+            if (!this.IsHandleCreated)
+            {
+                return;
+            }
+
+            try
+            {
+                var useDarkMode = this.isDarkMode ? 1 : 0;
+                DwmSetWindowAttribute(this.Handle, 20, ref useDarkMode, sizeof(int));
+                DwmSetWindowAttribute(this.Handle, 19, ref useDarkMode, sizeof(int));
+            }
+            catch
+            {
+            }
+        }
+
+        private void ApplyNativeControlThemes()
+        {
+            this.ApplyNativeControlTheme(this.deviceTreeView);
+            this.ApplyNativeControlTheme(this.statusTreeView);
+            this.ApplyNativeControlTheme(this.eventTreeView);
+            this.ApplyNativeControlTheme(this.attributesTreeView);
+            this.ApplyNativeControlTheme(this.locationTreeView);
+            this.ApplyNativeControlTheme(this.mqttInfoTreeView);
+            this.ApplyNativeControlTheme(this.deviceComboBox);
+            this.ClearNativeControlTheme(this.mainTabControl);
+        }
+
+        private void ApplyNativeControlTheme(Control control)
+        {
+            if (control == null || !control.IsHandleCreated)
+            {
+                return;
+            }
+
+            try
+            {
+                SetWindowTheme(control.Handle, this.isDarkMode ? "DarkMode_Explorer" : "Explorer", null);
+            }
+            catch
+            {
+            }
+        }
+
+        private void ClearNativeControlTheme(Control control)
+        {
+            if (control == null || !control.IsHandleCreated)
+            {
+                return;
+            }
+
+            try
+            {
+                SetWindowTheme(control.Handle, string.Empty, string.Empty);
+            }
+            catch
+            {
+            }
+        }
+
+        private void ApplyLabelTheme(Control root)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            foreach (Control control in root.Controls)
+            {
+                var label = control as Label;
+                if (label != null)
+                {
+                    label.ForeColor = this.CurrentTextColor;
+                    if (label != this.connectionStatusLabel)
+                    {
+                        label.BackColor = root.BackColor;
+                    }
+                }
+
+                var checkBox = control as CheckBox;
+                if (checkBox != null)
+                {
+                    checkBox.ForeColor = this.CurrentTextColor;
+                    checkBox.BackColor = root.BackColor;
+                }
+
+                this.ApplyLabelTheme(control);
+            }
+        }
+
+        private void HandleThemeModeChanged()
+        {
+            this.isDarkMode = this.themeModeCheckBox.Checked;
+            this.ApplyTheme();
+        }
+
+        private void ApplyConnectionStatusColor()
+        {
+            if (this.connectionStatusLabel == null)
+            {
+                return;
+            }
+
+            var text = this.connectionStatusLabel.Text ?? string.Empty;
+            if (text.IndexOf("kein", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("nicht", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("gelöscht", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("fehler", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                this.connectionStatusLabel.ForeColor = this.CurrentErrorColor;
+                return;
+            }
+
+            if (text.IndexOf("geladen", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("erfolgreich", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                text.IndexOf("erneuert", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                this.connectionStatusLabel.ForeColor = this.CurrentSuccessColor;
+                return;
+            }
+
+            this.connectionStatusLabel.ForeColor = this.CurrentMutedTextColor;
         }
 
         private void WireEvents()
@@ -550,8 +1358,14 @@ namespace NavimowDesktopController
             this.loadMapImageButton.Click += (sender, args) => this.LoadMapImage();
             this.clearMapImageButton.Click += (sender, args) => this.ClearMapImage();
             this.editMapImageCheckBox.CheckedChanged += (sender, args) => this.HandleEditMapImageChanged();
+            this.themeModeCheckBox.CheckedChanged += (sender, args) => this.HandleThemeModeChanged();
             this.overlayScaleTrackBar.Scroll += (sender, args) => this.HandleOverlayScaleChanged();
             this.overlayRotationTrackBar.Scroll += (sender, args) => this.HandleOverlayRotationChanged();
+            this.allValuesPanel.MouseWheel += this.AllValuesPanel_MouseWheel;
+            this.allValuesPanel.MouseDown += this.AllValuesPanel_MouseDown;
+            this.allValuesPanel.MouseMove += this.AllValuesPanel_MouseMove;
+            this.allValuesPanel.MouseUp += this.AllValuesPanel_MouseUp;
+            this.allValuesPanel.Resize += (sender, args) => this.allValuesPanel.Invalidate();
             this.deviceComboBox.SelectedIndexChanged += async (sender, args) => await this.HandleDeviceSelectionChangedAsync();
             this.startButton.Click += async (sender, args) => await this.SendCommandAsync("start");
             this.stopButton.Click += async (sender, args) => await this.SendCommandAsync("stop");
@@ -580,13 +1394,13 @@ namespace NavimowDesktopController
                 this.session = await this.apiClient.ExchangeCodeForTokenAsync(code);
                 this.sessionStore.Save(this.session);
                 this.connectionStatusLabel.Text = "Token erfolgreich gespeichert.";
-                this.connectionStatusLabel.ForeColor = Color.DarkGreen;
+                this.connectionStatusLabel.ForeColor = this.CurrentSuccessColor;
                 this.AppendLog("Token erfolgreich abgerufen.");
             }
             catch (Exception ex)
             {
                 this.connectionStatusLabel.Text = "Token konnte nicht geladen werden.";
-                this.connectionStatusLabel.ForeColor = Color.DarkRed;
+                this.connectionStatusLabel.ForeColor = this.CurrentErrorColor;
                 this.AppendLog("Token-Fehler: " + ex.Message);
                 MessageBox.Show(this, ex.Message, "Token abrufen", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
@@ -633,7 +1447,7 @@ namespace NavimowDesktopController
             this.session = null;
             this.authorizationCodeTextBox.Text = string.Empty;
             this.connectionStatusLabel.Text = "Token gelöscht.";
-            this.connectionStatusLabel.ForeColor = Color.DarkRed;
+            this.connectionStatusLabel.ForeColor = this.CurrentErrorColor;
             this.devices.Clear();
             this.deviceComboBox.Items.Clear();
             this.lastDeviceInfo = null;
@@ -1159,8 +1973,8 @@ namespace NavimowDesktopController
 
         private void UpdateAllValuesList()
         {
-            this.allValuesListView.BeginUpdate();
-            this.allValuesListView.Items.Clear();
+            this.allValuesRows.Clear();
+            this.allValuesScrollOffset = 0;
 
             var addedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -1171,13 +1985,7 @@ namespace NavimowDesktopController
             this.AddFlattenedSection("location", this.lastLocation, addedPaths);
             this.AddFlattenedSection("mqtt", this.lastMqttInfo, addedPaths);
             this.AddKnownFieldRows(addedPaths);
-
-            foreach (ColumnHeader column in this.allValuesListView.Columns)
-            {
-                column.Width = -2;
-            }
-
-            this.allValuesListView.EndUpdate();
+            this.allValuesPanel.Invalidate();
         }
 
         private void AddFlattenedSection(string prefix, Dictionary<string, object> data, HashSet<string> addedPaths)
@@ -1209,10 +2017,12 @@ namespace NavimowDesktopController
                 }
 
                 var label = FieldCatalog.GetLabel(lastSegment);
-                var item = new ListViewItem(fullPath);
-                item.SubItems.Add(label);
-                item.SubItems.Add(FieldCatalog.GetDisplayValue(lastSegment, pair.Value));
-                this.allValuesListView.Items.Add(item);
+                this.allValuesRows.Add(new AllValuesRow
+                {
+                    Path = fullPath,
+                    Label = label,
+                    Value = FieldCatalog.GetDisplayValue(lastSegment, pair.Value),
+                });
                 if (addedPaths != null)
                 {
                     addedPaths.Add(fullPath);
@@ -1254,7 +2064,7 @@ namespace NavimowDesktopController
                 sections.Add("MQTT INFO" + Environment.NewLine + JsonUtils.ToJson(this.lastMqttInfo));
             }
 
-            this.rawJsonTextBox.Text = sections.Count == 0 ? "Noch keine Daten vorhanden." : string.Join(Environment.NewLine + Environment.NewLine, sections.ToArray());
+            this.rawJsonTextView.TextContent = sections.Count == 0 ? "Noch keine Daten vorhanden." : string.Join(Environment.NewLine + Environment.NewLine, sections.ToArray());
         }
 
         private void ResetLiveData()
@@ -1296,7 +2106,7 @@ namespace NavimowDesktopController
                 this.session = refreshed;
                 this.sessionStore.Save(this.session);
                 this.connectionStatusLabel.Text = "Token automatisch erneuert.";
-                this.connectionStatusLabel.ForeColor = Color.DarkGreen;
+                this.connectionStatusLabel.ForeColor = this.CurrentSuccessColor;
                 this.AppendLog("Token wurde automatisch erneuert.");
             }
         }
@@ -1647,17 +2457,19 @@ namespace NavimowDesktopController
                     display = FieldCatalog.GetDisplayValue(key, JsonUtils.ToDisplayString(value));
                 }
 
-                var item = new ListViewItem(fullPath);
-                item.SubItems.Add(FieldCatalog.GetLabel(key));
-                item.SubItems.Add(display);
-                this.allValuesListView.Items.Add(item);
+                this.allValuesRows.Add(new AllValuesRow
+                {
+                    Path = fullPath,
+                    Label = FieldCatalog.GetLabel(key),
+                    Value = display,
+                });
             }
         }
 
         private void AppendLog(string message)
         {
             var block = "[" + DateTime.Now.ToString("HH:mm:ss") + "] " + message + Environment.NewLine + Environment.NewLine;
-            this.logTextBox.AppendText(block);
+            this.logTextView.AppendText(block);
         }
 
         private void SetMqttStatus(string text)
@@ -1835,9 +2647,9 @@ namespace NavimowDesktopController
         private void MapPanel_Paint(object sender, PaintEventArgs e)
         {
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            e.Graphics.Clear(Color.White);
+            e.Graphics.Clear(this.CurrentSurfaceColor);
 
-            using (var borderPen = new Pen(Color.Gainsboro, 1))
+            using (var borderPen = new Pen(this.CurrentBorderColor, 1))
             {
                 e.Graphics.DrawRectangle(borderPen, 0, 0, this.mapPanel.Width - 1, this.mapPanel.Height - 1);
             }
@@ -1848,7 +2660,7 @@ namespace NavimowDesktopController
                 this.DrawOverlayWithoutPath(e.Graphics);
 
                 using (var font = new Font("Segoe UI", 11F))
-                using (var brush = new SolidBrush(Color.Gray))
+                using (var brush = new SolidBrush(this.CurrentMapMessageColor))
                 {
                     var message = this.overlayMapImage == null
                         ? "Noch keine Positionsdaten vorhanden."
@@ -1888,14 +2700,20 @@ namespace NavimowDesktopController
 
             if (screenPoints.Length >= 2)
             {
-                using (var pathPen = new Pen(Color.Blue, 2F))
+                using (var pathPen = new Pen(this.CurrentMapPathColor, 2F))
                 {
                     e.Graphics.DrawLines(pathPen, screenPoints);
                 }
             }
 
-            DrawMarker(e.Graphics, Brushes.Red, Pens.DarkRed, screenPoints[0], 10F);
-            DrawMarker(e.Graphics, Brushes.LimeGreen, Pens.DarkGreen, screenPoints[screenPoints.Length - 1], 10F);
+            using (var startBrush = new SolidBrush(this.CurrentMarkerStartColor))
+            using (var startPen = new Pen(ControlPaint.Dark(this.CurrentMarkerStartColor, 0.15F)))
+            using (var endBrush = new SolidBrush(this.CurrentMarkerEndColor))
+            using (var endPen = new Pen(ControlPaint.Dark(this.CurrentMarkerEndColor, 0.15F)))
+            {
+                DrawMarker(e.Graphics, startBrush, startPen, screenPoints[0], 10F);
+                DrawMarker(e.Graphics, endBrush, endPen, screenPoints[screenPoints.Length - 1], 10F);
+            }
         }
 
         private void LoadMapImage()
@@ -2211,7 +3029,7 @@ namespace NavimowDesktopController
 
             if (this.editMapImageCheckBox != null && this.editMapImageCheckBox.Checked)
             {
-                using (var pen = new Pen(Color.DarkOrange, 2F))
+                using (var pen = new Pen(this.CurrentDangerColor, 2F))
                 {
                     pen.DashStyle = System.Drawing.Drawing2D.DashStyle.Dash;
                     graphics.DrawRectangle(pen, -width / 2F, -height / 2F, width, height);
